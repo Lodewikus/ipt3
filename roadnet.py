@@ -63,13 +63,12 @@ print("Loading " + str(len(dir_list)) + " XML files in ", path)
 def xml_to_multiple_lines(fname, fnum):
 
     with open(fname, 'r') as fr:
-        # reading line by line
         lines = fr.readlines()
         last_line = len(lines)
-        #print(last_line)
 
     for line in lines:
-        replaced_line = re.sub(">", ">\u000A", line)
+        #replaced_line = re.sub(">", ">\u000A", line)
+        replaced_line = re.sub(">", ">\n", line)
 
     outfile = 'data/roadnet/xml_prep/f'+str(fnum)+'.xml'
 
@@ -83,7 +82,6 @@ def xml_to_multiple_lines(fname, fnum):
 
 for i in range(0,len(dir_list)):
     xml_file = path+dir_list[i]
-    #print(xml_file)
     xml_to_multiple_lines(xml_file,i)
 
 number_of_xml = len(dir_list)
@@ -98,38 +96,63 @@ path = "data/roadnet/xml_prep/"
 prep_dir_list = os.listdir(path)
 
 # %%
+le_code = ''
+
+# %%
 def import_roadnet_files2(fname, fnum, outfile):
 
     try:    
         with open(fname, 'r') as fr:
-            # reading line by line
             lines = fr.readlines()
 
             last_line = len(lines)
 
-            # opening in writing mode
             with open(outfile, 'a') as fw:
+                i = 0
                 for line in lines:      
+                    i = i + 1
+                    substr_le = 'LE_ID="ug1"'       
+                    le11 = re.search(substr_le, line)
+                    print(le11)
+                    substr_le = 'LE_ID="UG1"'
+                    le12 = re.search(substr_le, line)
+                    substr_le = 'LE_ID="mz1"'       
+                    le21 = re.search(substr_le, line)
+                    substr_le = 'LE_ID="MZ1"'
+                    le22 = re.search(substr_le, line)                    
+                    substr_le = 'LE_ID="na1"'       
+                    le31 = re.search(substr_le, line)
+                    substr_le = 'LE_ID="NA1"'
+                    le32 = re.search(substr_le, line)                    
+
+                    if le11 != None or le12 != None:
+                        le_code = 'UG1'
+                    if le21 != None or le22 != None:
+                        le_code = 'MZ1'                        
+                    if le31 != None or le32 != None:
+                        le_code = 'NA1'                        
+
                     substr1 = 'CCBROADNETWORKBENCHSESSIONTABLEENTITY'       
                     x1 = re.search(substr1, line)
                     substr2 = 'Document>'       
                     x2 = re.search(substr2, line)
                     substr3 = 'xml version='       
                     x3 = re.search(substr3, line)
-                    #print(x)
                     if x1 == None and x2 == None and x3 == None:
                         fw.write(line)
-        #print(fname+" lines deleted")
-
+        return le_code
+            
     except:
         print("Error importing "+fname)
+
 
 # %%
 for i in range(0,len(prep_dir_list)):
     xml_file = path+prep_dir_list[i]
-    #print(i)
-    #print(xml_file)
-    import_roadnet_files2(xml_file,i, consolidated_roadnet_out_file)
+    le_code = import_roadnet_files2(xml_file,i, consolidated_roadnet_out_file)
+
+# %%
+le_code
 
 # %% [markdown]
 # ### Split up the consolidated xml file into 5,000 lines, else they cannot be imported into a Pandas dataframe
@@ -144,14 +167,12 @@ sizelimit = 5000
 
 try:    
     with open(fname, 'r') as fr:
-        # reading line by line
         lines = fr.readlines()
 
         last_line = len(lines)
 
         line_counter = 1
 
-        # opening in writing mode
         last_x = 0
         for i in range(0,len(lines)):
             line = lines[i]
@@ -202,19 +223,10 @@ for i in range(1,len(dir_list)):
     rdnet_out = pd.concat([rdnet_out, temp], ignore_index=True)
 
 # %%
-len(rdnet_out)
-
-# %%
-rdnet_out[rdnet_out.duplicated(['INVENTTRANSID'], keep=False)]
-
-# %%
 rdnet_out.drop(columns={'OUTPERFORMROADNETDESTINATION'}, inplace=True, axis=1)
 
 # %%
 rdnet_out = rdnet_out.drop_duplicates(keep='first').copy()
-
-# %%
-len(rdnet_out)
 
 # %% [markdown]
 # ### Create the Roadnet inbound file by copying selected columns as-is from the outbound data
@@ -237,7 +249,6 @@ today = today.replace(':','h')
 today = today.replace('-','')
 today = today.replace(' ','-')
 today = today[0:14] + '-'
-#print("Today date is: ", today)
 
 # %%
 rdnet_in['ROADNETROUTEINTERNALROUTEID'] = today + rdnet_in['STOPLOCATIONID'].astype(str)
@@ -246,11 +257,15 @@ rdnet_in['ROADNETROUTEINTERNALROUTEID'] = today + rdnet_in['STOPLOCATIONID'].ast
 no_of_customers = len(rdnet_in['STOPLOCATIONID'].unique())
 
 # %%
+# Get legal entity from the invettransid
+if le_code == "":
+    le_code = rdnet_in.loc[0, 'INVENTTRANSID'][:3]
+
+# %%
+# Defaults applied to all LEs
+
 rdnet_in['APPTID'] = ''
-rdnet_in['DESCRIPTION'] = 'BLOEM_PLAN'
 rdnet_in['ERROR'] = ''
-rdnet_in['FIRSTDRIVER'] = '825196'
-rdnet_in['FIRSTTRAILER'] = 'ST29PTAIL'
 rdnet_in['LASTSTOPISDESTINATION'] = 'No'
 rdnet_in['LOADID'] = ''
 rdnet_in['LOADTEMPLATEID'] = ''
@@ -260,30 +275,88 @@ rdnet_in['PALLETQTY'] = '0'
 rdnet_in['REFERENCECATEGORY'] = 'Sales'
 rdnet_in['REFERENCEDOCUMENT'] = 'SalesOrder'
 rdnet_in['ROADNETINTERNALSESSIONID'] = '35411'
-rdnet_in['ROADNETREGIONID'] = 'ZA1'
+rdnet_in['ROADNETREGIONID'] = le_code
 rdnet_in['ROUTECODE'] = ''
 rdnet_in['SECONDDRIVER'] = ''
 rdnet_in['SECONDTRAILER'] = ''
 rdnet_in['SEQUENCEDISTANCE'] = '.000000'
 rdnet_in['SEQUENCENUMBER'] = '1'
 rdnet_in['SEQUENCETRAVELTIME'] = '0'
-rdnet_in['SHIPPINGCARRIER'] = '0'
 rdnet_in['STATUS'] = 'Error'
 rdnet_in['STOPTYPE'] = 'stpStop'
 rdnet_in['TOTALDISTANCE'] = '.000000'
 rdnet_in['TOTALROUTEDISTANCE'] = '.000000'
 rdnet_in['TRUCKANDTRAILERASSIGNED'] = 'No'
 rdnet_in['UNITID'] = ''
-rdnet_in['VEHICLEID'] = 'TT4X2TAIL'
 rdnet_in['STOPSERVICETIME'] = '720'
 rdnet_in['TOTALSERVICETIME'] = '720'
 rdnet_in['TOTALTRAVELTIME'] = '0'
 rdnet_in['LINEREFID'] = rdnet_in['INVENTTRANSID']
 
 # %%
+# Defaults that are specific per LE
+
+if le_code == "ZA1":
+    rdnet_in['DESCRIPTION'] = 'BLOEM_PLAN'
+    rdnet_in['FIRSTDRIVER'] = '825196'
+    rdnet_in['FIRSTTRAILER'] = 'ST29PTAIL'
+    rdnet_in['SHIPPINGCARRIER'] = '0'
+    rdnet_in['VEHICLEID'] = 'TT4X2TAIL'
+
+elif le_code == "NA1":
+    rdnet_in['DESCRIPTION'] = 'Windhoek_PLAN'
+    rdnet_in['FIRSTDRIVER'] = 'NA1-000002'
+    #rdnet_in['FIRSTTRAILER'] = 'LD1001'
+    rdnet_in['FIRSTTRAILER'] = 'TT1001'
+    rdnet_in['SHIPPINGCARRIER'] = '0'
+    #rdnet_in['VEHICLEID'] = 'LD1002'
+    rdnet_in['VEHICLEID'] = 'TT1002'
+
+elif le_code == "UG1":
+    rdnet_in['DESCRIPTION'] = 'Rwenzori_PLAN'
+    rdnet_in['FIRSTDRIVER'] = 'UG1-000001'
+    rdnet_in['FIRSTTRAILER'] = 'TT1003'
+    rdnet_in['SHIPPINGCARRIER'] = 'INTERNAL'
+    rdnet_in['VEHICLEID'] = 'TT1004'    
+    
+elif le_code == "MZ1":
+    rdnet_in['DESCRIPTION'] = 'Chimoio_PLAN'
+    rdnet_in['FIRSTDRIVER'] = 'MZ1-000001'
+    rdnet_in['FIRSTTRAILER'] = 'TT1002'
+    rdnet_in['SHIPPINGCARRIER'] = '0'
+    rdnet_in['VEHICLEID'] = 'TT1003'    
+    
+else:
+    print("No valid legal entity")
+    raise SystemExit("Terminating")
+
+# %%
+drivers_trucks = pd.read_excel('data/roadnet/drivers_trucks.xlsx')
+
+# %%
+drivers_trucks = drivers_trucks[drivers_trucks['le_code'] == le_code].reset_index(drop=True).copy()
+drivers_trucks_len = len(drivers_trucks)
+
+# %%
+stop_locations = rdnet_in['STOPLOCATIONID'].unique()
+
+# %%
+rdnet_in = rdnet_in.sort_values(by=['STOPLOCATIONID']).reset_index(drop=True).copy()
+
+# %%
+truck_index = 1
+for stop_location in stop_locations:
+    if truck_index > drivers_trucks_len:
+        truck_index = 1
+    for index, row in rdnet_in[rdnet_in['STOPLOCATIONID'] == stop_location].iterrows():
+        rdnet_in.loc[index, ['FIRSTDRIVER']] = drivers_trucks.loc[truck_index - 1, ['FIRSTDRIVER']]
+        rdnet_in.loc[index, ['FIRSTTRAILER']] = drivers_trucks.loc[truck_index - 1, ['FIRSTTRAILER']]
+        rdnet_in.loc[index, ['VEHICLEID']] = drivers_trucks.loc[truck_index - 1, ['VEHICLEID']]
+    truck_index = truck_index + 1
+
+# %%
 date_txt = input('Enter the dispatch date in the format yyyy-mm-dd: ')
 date_dt = pd.to_datetime(date_txt)
-#date_dt = pd.to_datetime('today')
 
 # %%
 rdnet_in['ROUTECOMPLETETIME'] = date_dt
@@ -304,10 +377,6 @@ rdnet_in['SCHEDULEDSHIPDATETIME'] = rdnet_in['SCHEDULEDSHIPDATETIME'].dt.normali
 rdnet_in['STOPARRIVALTIME'] = date_dt
 rdnet_in['STOPARRIVALTIME'] = rdnet_in['STOPARRIVALTIME'].dt.normalize() + pd.Timedelta(days=0) + pd.Timedelta(hours=8) + pd.Timedelta(minutes=28)
 
-# %%
-# Get legal entity from the invettransid
-le_code = rdnet_in.loc[0, 'INVENTTRANSID'][:3]
-
 # %% [markdown]
 # ### Get customer master in order to get the postal code
 
@@ -315,11 +384,7 @@ le_code = rdnet_in.loc[0, 'INVENTTRANSID'][:3]
 print("Loading the customer master to obtain the zipcode")
 
 if le_code == "ZA1":
-    #Do the following once-off to create the parquet file
-    #customers=pd.read_csv("./data/customers/2023-08-10_CustomersV3.csv",low_memory=False)
-    #customers.to_parquet("./data/customers.parquet")
     customers=pd.read_parquet("./data/customers/customers.parquet")
-    #customers_short = customers[['ADDRESSZIPCODE','CUSTOMERACCOUNT','ORGANIZATIONNAME']].copy()
 
 elif le_code == "NA1" or le_code == "UG1" or le_code == "MZ1":
     customers=pd.read_csv("./data/customers/NA1_UG1_MZ1_Export-Customersaddresses V3.csv")
@@ -333,9 +398,6 @@ customers_short = customers[['ADDRESSZIPCODE','CUSTOMERACCOUNT']].copy()
 customers_short['ADDRESSZIPCODE'] = customers_short['ADDRESSZIPCODE'].fillna(0)
 customers_short['ADDRESSZIPCODE'] = customers_short['ADDRESSZIPCODE'].astype(int)
 customers_short['ADDRESSZIPCODE'] = customers_short['ADDRESSZIPCODE'].astype(str)
-
-# %%
-len(rdnet_in)
 
 # %%
 rdnet_in_bk=rdnet_in.copy()
